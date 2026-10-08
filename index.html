@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barangay Cleanliness Reporter</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+    <style>
+        body {
+            background-color: #f5efe3;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: #006400;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 4px solid #ff8c00;
+        }
+
+        header p {
+            color: #f3e5ff;
+            margin: 8px 0 0 0;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 900px;
+            margin: 25px auto;
+            background-color: #fffaf0;
+            padding: 25px;
+            border-radius: 10px;
+        }
+
+        h2, h3 {
+            color: #006400;
+            border-left: 4px solid #ff8c00;
+            padding-left: 12px;
+        }
+
+        label {
+            display: block;
+            margin: 15px 0 5px;
+            font-weight: bold;
+            color: #5a3d75;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #a5d6a7;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #ff8c00;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            margin: 5px 5px 5px 0;
+        }
+
+        button:hover {
+            background-color: #e67e00;
+        }
+
+        .btn-green { background-color: #006400; }
+        .btn-green:hover { background-color: #004d00; }
+        .btn-gray { background-color: #6b7280; }
+        .btn-gray:hover { background-color: #4b5563; }
+
+        #map {
+            height: 320px;
+            border: 1px solid #a5d6a7;
+            border-radius: 6px;
+            margin-bottom: 12px;
+        }
+
+        .coords {
+            color: #5a3d75;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .report-item {
+            border-bottom: 1px solid #ddd;
+            padding: 12px 0;
+        }
+
+        .status-pending { color: #d69e2e; font-weight: bold; }
+        .thank-you {
+            display: none;
+            text-align: center;
+            padding: 30px;
+        }
+
+        .checkbox-wrapper {
+            margin: 20px 0 5px;
+            padding-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Barangay Cleanliness Reporter</h1>
+        <p>Click the map, mark the spot, and send your report — quick and easy</p>
+    </header>
+
+    <div class="container">
+        <h2>📍 Map of Reports</h2>
+        <div id="map"></div>
+        <p class="coords">📍 Location: <span id="latlng">Click anywhere on the map</span></p>
+        <button type="button" class="btn-green" onclick="getMyLocation()">📍 Use My Location</button>
+    </div>
+
+    <div class="container" id="formSection">
+        <h2>📝 Report a Problem</h2>
+
+        <label for="issueType">What is the issue?</label>
+        <select id="issueType">
+            <option value="">Choose one</option>
+            <option value="Dirty Area">Dirty Area</option>
+            <option value="Clogged Canal">Clogged Canal</option>
+            <option value="Broken Toilet">Broken Toilet</option>
+            <option value="Garbage Pile">Garbage Pile</option>
+            <option value="Other">Other</option>
+        </select>
+
+        <label for="urgency">How urgent is it?</label>
+        <select id="urgency">
+            <option value="low">🟢 Low — can be fixed later</option>
+            <option value="medium" selected>🟡 Medium — within 3 days</option>
+            <option value="urgent">🔴 Urgent — needs immediate attention</option>
+        </select>
+
+        <label for="locationName">Near which place?</label>
+        <input type="text" id="locationName" placeholder="e.g., Near Barangay Hall">
+
+        <label for="contact">Contact Number (optional)</label>
+        <input type="text" id="contact" placeholder="09XX-XXX-XXXX">
+
+        <div class="checkbox-wrapper">
+            <label style="display: inline; font-weight: normal;">
+                <input type="checkbox" id="anonymous"> Report Anonymously
+            </label>
+        </div>
+
+        <label for="description">Tell us more</label>
+        <textarea id="description" rows="4" placeholder="Describe what you see..."></textarea>
+
+        <label for="photo">Add a photo (optional)</label>
+        <input type="file" id="photo" accept="image/*">
+
+        <br><br>
+        <button type="button" onclick="submitReport()">✅ Send Report</button>
+        <button type="button" class="btn-gray" onclick="clearForm()">🗑️ Clear Form</button>
+    </div>
+
+    <div class="container thank-you" id="thankYouSection">
+        <h2>✅ Thank You!</h2>
+        <p style="font-size: 18px; color: #2d2d2d;">Your report has been added to the map.</p>
+        <p style="color: #5a3d75;">Thank you for caring for our community!</p>
+        <button type="button" onclick="showForm()">📝 Send Another Report</button>
+    </div>
+
+    <div class="container">
+        <h3>📋 Recent Reports</h3>
+        <div id="reportsList">
+            <p style="color: #7a4f96; font-style: italic;">No reports yet. Be the first to report!</p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        var map = L.map('map').setView([15.4859, 120.9504], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        var tempMarker;
+
+        map.on('click', function(e) {
+            if (tempMarker) map.removeLayer(tempMarker);
+            tempMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
+            document.getElementById('latlng').textContent = e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5);
+        });
+
+        function getMyLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(pos) {
+                    var lat = pos.coords.latitude;
+                    var lng = pos.coords.longitude;
+                    map.setView([lat, lng], 16);
+                    if (tempMarker) map.removeLayer(tempMarker);
+                    tempMarker = L.marker([lat, lng]).addTo(map);
+                    document.getElementById('latlng').textContent = lat.toFixed(5) + ', ' + lng.toFixed(5);
+                });
+            } else {
+                alert('Geolocation not supported.');
+            }
+        }
+
+        function submitReport() {
+            var type = document.getElementById('issueType').value;
+            var urgency = document.getElementById('urgency').value;
+            var place = document.getElementById('locationName').value;
+            var contact = document.getElementById('contact').value || 'Not provided';
+            var anonymous = document.getElementById('anonymous').checked;
+            var details = document.getElementById('description').value;
+            var coordsText = document.getElementById('latlng').textContent;
+
+            if (!type || !place || !details || coordsText === "Click anywhere on the map") {
+                alert('Please fill everything out and click the map first.');
+                return;
+            }
+
+            var coords = coordsText.split(', ');
+            var lat = parseFloat(coords[0]);
+            var lng = parseFloat(coords[1]);
+
+            var redIcon = L.divIcon({
+                html: '<div style="background-color:#e53e3e; width:24px; height:24px; border-radius:50%; border:3px solid white; box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
+                className: '',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+
+            var urgencyText = urgency === 'low' ? '🟢 Low' : urgency === 'medium' ? '🟡 Medium' : '🔴 Urgent';
+            var reporter = anonymous ? 'Anonymous' : 'Resident';
+
+            L.marker([lat, lng], { icon: redIcon })
+                .addTo(map)
+                .bindPopup(
+                    '<strong>' + type + '</strong><br>' +
+                    urgencyText + '<br>' +
+                    '<b>Location:</b> ' + place + '<br>' +
+                    '<b>Details:</b> ' + details + '<br>' +
+                    '<small>Reported by: ' + reporter + '</small>'
+                );
+
+            addReportToList(type, urgency, place, details, anonymous);
+
+            document.getElementById('formSection').style.display = 'none';
+            document.getElementById('thankYouSection').style.display = 'block';
+
+            if (tempMarker) map.removeLayer(tempMarker);
+            tempMarker = null;
+            document.getElementById('latlng').textContent = 'Click anywhere on the map';
+        }
+
+        function addReportToList(type, urgency, place, details, anonymous) {
+            var list = document.getElementById('reportsList');
+            var emptyMsg = list.querySelector('p');
+            if (emptyMsg && emptyMsg.style.fontStyle === 'italic') emptyMsg.remove();
+
+            var time = new Date().toLocaleString();
+            var urgencyText = urgency === 'low' ? '🟢 Low' : urgency === 'medium' ? '🟡 Medium' : '🔴 Urgent';
+            var reporter = anonymous ? 'Anonymous' : 'Resident';
+
+            var item = document.createElement('div');
+            item.className = 'report-item';
+            item.innerHTML = 
+                '<strong>' + type + '</strong> ' + urgencyText + '<br>' +
+                '📍 ' + place + '<br>' +
+                '<small>' + details + '</small><br>' +
+                '<small>Reported by: ' + reporter + ' — ' + time + '</small><br>' +
+                '<span class="status-pending">⏳ Pending</span>';
+            
+            list.insertBefore(item, list.firstChild);
+        }
+
+        function showForm() {
+            clearForm();
+            document.getElementById('formSection').style.display = 'block';
+            document.getElementById('thankYouSection').style.display = 'none';
+        }
+
+        function clearForm() {
+            document.getElementById('issueType').value = '';
+            document.getElementById('urgency').value = 'medium';
+            document.getElementById('locationName').value = '';
+            document.getElementById('contact').value = '';
+            document.getElementById('anonymous').checked = false;
+            document.getElementById('description').value = '';
+            document.getElementById('photo').value = '';
+            document.getElementById('latlng').textContent = 'Click anywhere on the map';
+            if (tempMarker) map.removeLayer(tempMarker);
+            tempMarker = null;
+        }
+    </script>
+
+</body>
+</html>
